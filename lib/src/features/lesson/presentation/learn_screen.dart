@@ -2,81 +2,37 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/data/lesson_service.dart';
+import '../../../core/models/lesson_models.dart';
 
-class LearnScreen extends StatelessWidget {
+class LearnScreen extends StatefulWidget {
   const LearnScreen({super.key});
 
   @override
+  State<LearnScreen> createState() => _LearnScreenState();
+}
+
+class _LearnScreenState extends State<LearnScreen> {
+  final LessonService _lessonService = LessonService();
+
+  @override
   Widget build(BuildContext context) {
+    final units = _lessonService.units;
     return Scaffold(
       backgroundColor: AppColors.background,
       bottomNavigationBar: _buildBottomNav(context),
       appBar: _buildAppBar(),
-      body: SingleChildScrollView(
+      body: ListView.separated(
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _buildUnitSection(
-              title: 'Unit 1: Chào hỏi & Giới thiệu',
-              subtitle: 'Học các câu cơ bản',
-              isLocked: false,
-              children: [
-                _buildLessonCard(
-                  title: 'Xin chào',
-                  statusText: 'Hoàn thành',
-                  icon: Icons.check_rounded,
-                  iconColor: AppColors.onPrimary,
-                  iconBgColor: AppColors.primary,
-                  borderColor: AppColors.primary,
-                  isCompleted: true,
-                  onTap: () {},
-                ),
-                const SizedBox(height: 12),
-                _buildLessonCard(
-                  title: 'Tên của bạn',
-                  statusText: 'Đang học',
-                  icon: Icons.play_arrow_rounded,
-                  iconColor: AppColors.surface,
-                  iconBgColor: AppColors.secondaryContainer,
-                  borderColor: AppColors.outline,
-                  progress: 0.5,
-                  onTap: () => context.push('/lesson'),
-                ),
-                const SizedBox(height: 12),
-                _buildLessonCard(
-                  title: 'Số đếm',
-                  statusText: 'Khóa',
-                  icon: Icons.lock_rounded,
-                  iconColor: AppColors.textSecondary,
-                  iconBgColor: AppColors.surfaceContainerHighest,
-                  borderColor: AppColors.outline,
-                  isLocked: true,
-                  onTap: () {},
-                ),
-              ],
-            ),
-            const SizedBox(height: 32),
-            _buildUnitSection(
-              title: 'Unit 2: Giao tiếp hàng ngày',
-              subtitle: 'Hoàn thành Unit 1 để mở khóa',
-              isLocked: true,
-              children: [
-                _buildLessonCard(
-                  title: 'Bài 1',
-                  statusText: 'Khóa',
-                  icon: Icons.lock_rounded,
-                  iconColor: AppColors.textSecondary,
-                  iconBgColor: AppColors.surfaceContainerHighest,
-                  borderColor: AppColors.outline,
-                  isLocked: true,
-                  onTap: () {},
-                  hideSubtitle: true,
-                ),
-              ],
-            ),
-          ],
-        ),
+        itemCount: units.length,
+        separatorBuilder: (context, index) => const SizedBox(height: 32),
+        itemBuilder: (context, index) {
+          final unit = units[index];
+          return _buildUnitSection(
+            context: context,
+            unit: unit,
+          );
+        },
       ),
     );
   }
@@ -153,35 +109,33 @@ class LearnScreen extends StatelessWidget {
   }
 
   Widget _buildUnitSection({
-    required String title,
-    required String subtitle,
-    required bool isLocked,
-    required List<Widget> children,
+    required BuildContext context,
+    required Unit unit,
   }) {
     return Opacity(
-      opacity: isLocked ? 0.6 : 1.0,
+      opacity: unit.isLocked ? 0.6 : 1.0,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              if (isLocked) ...[
+              if (unit.isLocked) ...[
                 const Icon(Icons.lock_rounded, color: AppColors.textSecondary, size: 20),
                 const SizedBox(width: 8),
               ],
               Text(
-                title,
+                unit.title,
                 style: GoogleFonts.lexend(
                   fontWeight: FontWeight.w600,
                   fontSize: 24,
-                  color: isLocked ? AppColors.textSecondary : AppColors.textPrimary,
+                  color: unit.isLocked ? AppColors.textSecondary : AppColors.textPrimary,
                 ),
               ),
             ],
           ),
           const SizedBox(height: 4),
           Text(
-            subtitle,
+            unit.subtitle,
             style: GoogleFonts.lexend(
               fontWeight: FontWeight.w400,
               fontSize: 16,
@@ -189,27 +143,50 @@ class LearnScreen extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 16),
-          ...children,
+          ...unit.lessons.map((lesson) => Padding(
+            padding: const EdgeInsets.only(bottom: 12.0),
+            child: _buildLessonCard(
+              context: context,
+              lesson: lesson,
+              unitLocked: unit.isLocked,
+            ),
+          )),
         ],
       ),
     );
   }
 
   Widget _buildLessonCard({
-    required String title,
-    required String statusText,
-    required IconData icon,
-    required Color iconColor,
-    required Color iconBgColor,
-    required Color borderColor,
-    bool isCompleted = false,
-    bool isLocked = false,
-    bool hideSubtitle = false,
-    double? progress,
-    required VoidCallback onTap,
+    required BuildContext context,
+    required Lesson lesson,
+    required bool unitLocked,
   }) {
+    final bool isLocked = unitLocked || lesson.isLocked;
+    
+    IconData icon = Icons.play_arrow_rounded;
+    Color iconColor = AppColors.surface;
+    Color iconBgColor = AppColors.secondaryContainer;
+    Color borderColor = AppColors.outline;
+
+    if (lesson.isCompleted) {
+      icon = Icons.check_rounded;
+      iconColor = AppColors.onPrimary;
+      iconBgColor = AppColors.primary;
+      borderColor = AppColors.primary;
+    } else if (isLocked) {
+      icon = Icons.lock_rounded;
+      iconColor = AppColors.textSecondary;
+      iconBgColor = AppColors.surfaceContainerHighest;
+      borderColor = AppColors.outline;
+    }
+
     return GestureDetector(
-      onTap: isLocked ? null : onTap,
+      onTap: isLocked ? null : () async {
+        final result = await context.push('/lesson/${lesson.id}');
+        if (result == true) {
+          setState(() {}); // Refresh UI to show completion and unlock next
+        }
+      },
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
@@ -242,28 +219,27 @@ class LearnScreen extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        title,
+                        lesson.title,
                         style: GoogleFonts.lexend(
                           fontWeight: FontWeight.w600,
                           fontSize: 20,
                           color: isLocked ? AppColors.textSecondary : AppColors.textPrimary,
                         ),
                       ),
-                      if (!hideSubtitle)
-                        Text(
-                          statusText,
-                          style: GoogleFonts.lexend(
-                            fontWeight: FontWeight.w500,
-                            fontSize: 14,
-                            color: AppColors.textSecondary,
-                          ),
+                      Text(
+                        lesson.statusText,
+                        style: GoogleFonts.lexend(
+                          fontWeight: FontWeight.w500,
+                          fontSize: 14,
+                          color: AppColors.textSecondary,
                         ),
+                      ),
                     ],
                   ),
                 ),
               ],
             ),
-            if (progress != null) ...[
+            if (lesson.progress != null && !isLocked) ...[
               const SizedBox(height: 12),
               Container(
                 height: 12,
@@ -273,7 +249,7 @@ class LearnScreen extends StatelessWidget {
                 ),
                 child: FractionallySizedBox(
                   alignment: Alignment.centerLeft,
-                  widthFactor: progress,
+                  widthFactor: lesson.progress,
                   child: Container(
                     decoration: BoxDecoration(
                       color: AppColors.secondaryContainer,

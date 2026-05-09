@@ -49,8 +49,11 @@ final GoRouter _router = GoRouter(
       builder: (context, state) => const HomeScreen(),
     ),
     GoRoute(
-      path: '/lesson',
-      builder: (context, state) => const LessonScreen(),
+      path: '/lesson/:id',
+      builder: (context, state) {
+        final id = state.pathParameters['id']!;
+        return LessonScreen(lessonId: id);
+      },
     ),
     GoRoute(
       path: '/learn',

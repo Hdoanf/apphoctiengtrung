@@ -2,12 +2,24 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/data/lesson_service.dart';
+import '../../../core/models/lesson_models.dart';
 
-class HomeScreen extends StatelessWidget {
+class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
   @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> {
+  final LessonService _lessonService = LessonService();
+
+  @override
   Widget build(BuildContext context) {
+    final units = _lessonService.units;
+    final nextLesson = _findNextLesson(units);
+
     return Scaffold(
       backgroundColor: AppColors.background,
       bottomNavigationBar: _buildCustomBottomNav(context),
@@ -18,25 +30,26 @@ class HomeScreen extends StatelessWidget {
             SliverPadding(
               padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 24.0),
               sliver: SliverToBoxAdapter(
-                child: _buildDashboardGrid(context),
+                child: _buildDashboardGrid(context, nextLesson),
               ),
             ),
-            SliverPadding(
-              padding: const EdgeInsets.symmetric(horizontal: 20.0),
-              sliver: SliverToBoxAdapter(
-                child: _buildUnitHeader(),
-              ),
-            ),
-            SliverPadding(
-              padding: const EdgeInsets.symmetric(vertical: 24.0),
-              sliver: SliverToBoxAdapter(
-                child: _buildPathMap(context),
-              ),
-            ),
+            ...units.map((unit) => _buildUnitSection(context, unit)),
           ],
         ),
       ),
     );
+  }
+
+  Lesson? _findNextLesson(List<Unit> units) {
+    for (final unit in units) {
+      if (unit.isLocked) continue;
+      for (final lesson in unit.lessons) {
+        if (!lesson.isCompleted && !lesson.isLocked) {
+          return lesson;
+        }
+      }
+    }
+    return null;
   }
 
   Widget _buildSliverAppBar() {
@@ -81,7 +94,7 @@ class HomeScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildDashboardGrid(BuildContext context) {
+  Widget _buildDashboardGrid(BuildContext context, Lesson? nextLesson) {
     return Row(
       children: [
         Expanded(
@@ -91,10 +104,10 @@ class HomeScreen extends StatelessWidget {
             decoration: BoxDecoration(
               color: AppColors.surface,
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: AppColors.outline.withOpacity(0.3)),
+              border: Border.all(color: AppColors.outline.withValues(alpha: 0.3)),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.05),
+                  color: Colors.black.withValues(alpha: 0.05),
                   blurRadius: 12,
                   offset: const Offset(0, 4),
                 ),
@@ -118,16 +131,16 @@ class HomeScreen extends StatelessWidget {
                   child: Stack(
                     alignment: Alignment.center,
                     children: [
-                      CircularProgressIndicator(
+                      const CircularProgressIndicator(
                         value: 1.0,
                         strokeWidth: 8,
                         valueColor: AlwaysStoppedAnimation(AppColors.surfaceContainer),
                       ),
-                      CircularProgressIndicator(
+                      const CircularProgressIndicator(
                         value: 0.75,
                         strokeWidth: 8,
                         strokeCap: StrokeCap.round,
-                        valueColor: const AlwaysStoppedAnimation(AppColors.tertiary),
+                        valueColor: AlwaysStoppedAnimation(AppColors.tertiary),
                       ),
                       Column(
                         mainAxisSize: MainAxisSize.min,
@@ -153,18 +166,21 @@ class HomeScreen extends StatelessWidget {
         const SizedBox(width: 12),
         Expanded(
           child: GestureDetector(
-            onTap: () => context.push('/lesson'),
+            onTap: nextLesson == null ? null : () async {
+              final result = await context.push('/lesson/${nextLesson.id}');
+              if (result == true) setState(() {});
+            },
             child: Container(
               height: 160,
               decoration: BoxDecoration(
-                color: AppColors.primaryDark,
+                color: nextLesson == null ? AppColors.outline : AppColors.primaryDark,
                 borderRadius: BorderRadius.circular(16),
               ),
               child: Container(
                 margin: const EdgeInsets.only(bottom: 4),
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: AppColors.primary,
+                  color: nextLesson == null ? AppColors.surfaceContainer : AppColors.primary,
                   borderRadius: BorderRadius.circular(16),
                 ),
                 child: Stack(
@@ -176,7 +192,7 @@ class HomeScreen extends StatelessWidget {
                         width: 80,
                         height: 80,
                         decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.1),
+                          color: Colors.white.withValues(alpha: 0.1),
                           shape: BoxShape.circle,
                         ),
                       ),
@@ -194,18 +210,20 @@ class HomeScreen extends StatelessWidget {
                                 fontWeight: FontWeight.w600,
                                 fontSize: 12,
                                 letterSpacing: 1.2,
-                                color: AppColors.onPrimary.withOpacity(0.9),
+                                color: (nextLesson == null ? AppColors.textSecondary : AppColors.onPrimary).withValues(alpha: 0.9),
                               ),
                             ),
                             const SizedBox(height: 4),
                             Text(
-                              'Greetings 1',
+                              nextLesson?.title ?? 'Tất cả xong!',
                               style: GoogleFonts.lexend(
                                 fontWeight: FontWeight.bold,
-                                fontSize: 20,
-                                color: AppColors.onPrimary,
+                                fontSize: 18,
+                                color: nextLesson == null ? AppColors.textPrimary : AppColors.onPrimary,
                                 height: 1.2,
                               ),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
                             ),
                           ],
                         ),
@@ -213,37 +231,38 @@ class HomeScreen extends StatelessWidget {
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           crossAxisAlignment: CrossAxisAlignment.end,
                           children: [
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                              decoration: BoxDecoration(
-                                color: Colors.white.withOpacity(0.2),
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: Row(
-                                children: [
-                                  const Icon(Icons.star_rounded, size: 14, color: AppColors.onPrimary),
-                                  const SizedBox(width: 4),
-                                  Text(
-                                    '10 XP',
-                                    style: GoogleFonts.lexend(
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 12,
-                                      color: AppColors.onPrimary,
+                            if (nextLesson != null)
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: Colors.white.withValues(alpha: 0.2),
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Row(
+                                  children: [
+                                    const Icon(Icons.star_rounded, size: 14, color: AppColors.onPrimary),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      '10 XP',
+                                      style: GoogleFonts.lexend(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 12,
+                                        color: AppColors.onPrimary,
+                                      ),
                                     ),
-                                  ),
-                                ],
+                                  ],
+                                ),
                               ),
-                            ),
                             Container(
                               padding: const EdgeInsets.all(6),
-                              decoration: const BoxDecoration(
-                                color: AppColors.onPrimary,
+                              decoration: BoxDecoration(
+                                color: nextLesson == null ? AppColors.outline : AppColors.onPrimary,
                                 shape: BoxShape.circle,
                               ),
-                              child: const Icon(
-                                Icons.play_arrow_rounded,
+                              child: Icon(
+                                nextLesson == null ? Icons.check_rounded : Icons.play_arrow_rounded,
                                 size: 20,
-                                color: AppColors.primary,
+                                color: nextLesson == null ? Colors.white : AppColors.primary,
                               ),
                             ),
                           ],
@@ -260,134 +279,161 @@ class HomeScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildUnitHeader() {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Unit 1',
-              style: GoogleFonts.lexend(
-                fontWeight: FontWeight.bold,
-                fontSize: 24,
-                color: AppColors.textPrimary,
-              ),
-            ),
-            Text(
-              'The Basics',
-              style: GoogleFonts.lexend(
-                fontWeight: FontWeight.w400,
-                fontSize: 16,
-                color: AppColors.textSecondary,
-              ),
-            ),
-          ],
-        ),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          decoration: BoxDecoration(
-            color: AppColors.surfaceContainer,
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: AppColors.outline.withOpacity(0.5)),
+  Widget _buildUnitSection(BuildContext context, Unit unit) {
+    return SliverMainAxisGroup(
+      slivers: [
+        SliverPadding(
+          padding: const EdgeInsets.symmetric(horizontal: 20.0),
+          sliver: SliverToBoxAdapter(
+            child: _buildUnitHeader(unit),
           ),
-          child: Row(
-            children: [
-              Text(
-                'Guide',
-                style: GoogleFonts.lexend(
-                  fontWeight: FontWeight.w500,
-                  fontSize: 14,
-                  color: AppColors.textSecondary,
-                ),
-              ),
-              const SizedBox(width: 4),
-              const Icon(Icons.menu_book_rounded, size: 18, color: AppColors.textSecondary),
-            ],
+        ),
+        SliverPadding(
+          padding: const EdgeInsets.symmetric(vertical: 24.0),
+          sliver: SliverToBoxAdapter(
+            child: _buildPathMap(context, unit),
           ),
         ),
       ],
     );
   }
 
-  Widget _buildPathMap(BuildContext context) {
-    return SizedBox(
-      height: 600, // Fixed height for the map
+  Widget _buildUnitHeader(Unit unit) {
+    return Opacity(
+      opacity: unit.isLocked ? 0.5 : 1.0,
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                unit.title,
+                style: GoogleFonts.lexend(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 24,
+                  color: AppColors.textPrimary,
+                ),
+              ),
+              Text(
+                unit.subtitle,
+                style: GoogleFonts.lexend(
+                  fontWeight: FontWeight.w400,
+                  fontSize: 16,
+                  color: AppColors.textSecondary,
+                ),
+              ),
+            ],
+          ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              color: AppColors.surfaceContainer,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: AppColors.outline.withValues(alpha: 0.5)),
+            ),
+            child: Row(
+              children: [
+                Text(
+                  'Guide',
+                  style: GoogleFonts.lexend(
+                    fontWeight: FontWeight.w500,
+                    fontSize: 14,
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+                const SizedBox(width: 4),
+                const Icon(Icons.menu_book_rounded, size: 18, color: AppColors.textSecondary),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+Widget _buildPathMap(BuildContext context, Unit unit) {
+  final lessons = unit.lessons;
+  final double mapHeight = (lessons.length + 1) * 120.0;
+
+  // Calculate how far the active line should go
+  double activeHeight = 0;
+  int lastReachedIndex = -1;
+  for (int i = 0; i < lessons.length; i++) {
+    if (lessons[i].isCompleted || !lessons[i].isLocked) {
+      lastReachedIndex = i;
+    }
+  }
+
+  if (lastReachedIndex != -1) {
+    activeHeight = 20.0 + (lastReachedIndex * 120.0) + 32.0;
+  }
+
+  return Opacity(
+    opacity: unit.isLocked ? 0.5 : 1.0,
+    child: SizedBox(
+      height: mapHeight,
       child: Stack(
         alignment: Alignment.topCenter,
         children: [
           // Background Path Line
           Container(
             width: 12,
-            height: 500,
+            height: mapHeight - 60,
             decoration: BoxDecoration(
-              color: AppColors.outline.withOpacity(0.5),
+              color: AppColors.outline.withValues(alpha: 0.5),
               borderRadius: BorderRadius.circular(6),
             ),
           ),
-          // Active Path Line (Progress)
-          Positioned(
-            top: 0,
-            child: Container(
-              width: 12,
-              height: 250, // Halfway down
-              decoration: BoxDecoration(
-                color: AppColors.primary,
-                borderRadius: BorderRadius.circular(6),
+          // Active Path Line
+          if (!unit.isLocked && activeHeight > 0)
+            Positioned(
+              top: 0,
+              child: Container(
+                width: 12,
+                height: activeHeight,
+                decoration: BoxDecoration(
+                  color: AppColors.primary,
+                  borderRadius: BorderRadius.circular(6),
+                ),
               ),
             ),
-          ),
-          // Nodes
-          Positioned(
-            top: 20,
-            left: MediaQuery.of(context).size.width / 2 - 32 - 20, // offset -20
-            child: _buildPathNode(
-              context: context,
-              icon: Icons.star_rounded,
-              status: NodeStatus.completed,
-              onTap: () => context.push('/lesson'),
+          // Nodes for each lesson
+            ...lessons.asMap().entries.map((entry) {
+              final index = entry.key;
+              final lesson = entry.value;
+              final bool isEven = index % 2 == 0;
+              final double top = 20.0 + (index * 120.0);
+              final double offset = isEven ? -40.0 : 40.0;
+              
+              NodeStatus status;
+              if (unit.isLocked || lesson.isLocked) {
+                status = NodeStatus.locked;
+              } else if (lesson.isCompleted) {
+                status = NodeStatus.completed;
+              } else {
+                status = NodeStatus.current;
+              }
+
+              return Positioned(
+                top: top,
+                left: MediaQuery.of(context).size.width / 2 - 32 + offset,
+                child: _buildPathNode(
+                  context: context,
+                  icon: status == NodeStatus.completed ? Icons.check_rounded : (status == NodeStatus.locked ? Icons.lock_rounded : Icons.play_arrow_rounded),
+                  status: status,
+                  onTap: () async {
+                    final result = await context.push('/lesson/${lesson.id}');
+                    if (result == true) setState(() {});
+                  },
+                ),
+              );
+            }),
+            Positioned(
+              top: 20.0 + (lessons.length * 120.0),
+              child: _buildTreasureNode(unit.isLocked),
             ),
-          ),
-          Positioned(
-            top: 120,
-            left: MediaQuery.of(context).size.width / 2 - 32 + 30, // offset +30
-            child: _buildPathNode(
-              context: context,
-              icon: Icons.star_rounded,
-              status: NodeStatus.completed,
-              onTap: () => context.push('/lesson'),
-            ),
-          ),
-          Positioned(
-            top: 230,
-            left: MediaQuery.of(context).size.width / 2 - 40 - 15, // offset -15, larger node
-            child: _buildPathNode(
-              context: context,
-              icon: Icons.play_arrow_rounded,
-              status: NodeStatus.current,
-              size: 80,
-              iconSize: 40,
-              onTap: () => context.push('/lesson'),
-            ),
-          ),
-          Positioned(
-            top: 360,
-            left: MediaQuery.of(context).size.width / 2 - 28 + 25, // offset +25, smaller locked
-            child: _buildPathNode(
-              context: context,
-              icon: Icons.lock_rounded,
-              status: NodeStatus.locked,
-              size: 56,
-              iconSize: 28,
-            ),
-          ),
-          Positioned(
-            top: 460,
-            left: MediaQuery.of(context).size.width / 2 - 32 - 10, // offset -10, treasure
-            child: _buildTreasureNode(),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -404,7 +450,6 @@ class HomeScreen extends StatelessWidget {
     final bool isCurrent = status == NodeStatus.current;
     
     final Color bgColor = isLocked ? AppColors.surfaceContainer : (isCurrent ? AppColors.surface : AppColors.primary);
-    final Color borderColor = isLocked ? AppColors.outline : AppColors.primary;
     final Color shadowColor = isLocked ? AppColors.outline : (isCurrent ? AppColors.primary : AppColors.primaryDark);
     final Color iconColor = isLocked ? AppColors.textTertiary : (isCurrent ? AppColors.primary : AppColors.onPrimary);
 
@@ -418,7 +463,7 @@ class HomeScreen extends StatelessWidget {
           shape: BoxShape.circle,
         ),
         child: Container(
-          margin: const EdgeInsets.only(bottom: 4), // tactile depth
+          margin: const EdgeInsets.only(bottom: 4),
           decoration: BoxDecoration(
             color: bgColor,
             shape: BoxShape.circle,
@@ -432,7 +477,6 @@ class HomeScreen extends StatelessWidget {
     );
 
     if (isCurrent) {
-      // Add pulsing ring for current node
       return Stack(
         alignment: Alignment.center,
         children: [
@@ -448,16 +492,12 @@ class HomeScreen extends StatelessWidget {
                     width: size,
                     height: size,
                     decoration: BoxDecoration(
-                      color: AppColors.primary.withOpacity(0.5),
+                      color: AppColors.primary.withValues(alpha: 0.5),
                       shape: BoxShape.circle,
                     ),
                   ),
                 ),
               );
-            },
-            onEnd: () {
-              // Note: A real implementation would loop this, but TweenAnimationBuilder alone just runs once.
-              // We'll leave it simple for now, or use an AnimationController for a continuous ping.
             },
           ),
           node,
@@ -468,22 +508,26 @@ class HomeScreen extends StatelessWidget {
     return node;
   }
 
-  Widget _buildTreasureNode() {
+  Widget _buildTreasureNode(bool isLocked) {
     return Container(
       width: 64,
       height: 64,
       decoration: BoxDecoration(
-        color: AppColors.outline,
+        color: isLocked ? AppColors.outline : AppColors.secondaryDark,
         borderRadius: BorderRadius.circular(16),
       ),
       child: Container(
         margin: const EdgeInsets.only(bottom: 4),
         decoration: BoxDecoration(
-          color: AppColors.surfaceContainer,
+          color: isLocked ? AppColors.surfaceContainer : AppColors.secondary,
           borderRadius: BorderRadius.circular(16),
         ),
-        child: const Center(
-          child: Icon(Icons.cruelty_free_rounded, color: AppColors.textTertiary, size: 32), // Treasure/Rib cage placeholder
+        child: Center(
+          child: Icon(
+            isLocked ? Icons.lock_outline_rounded : Icons.emoji_events_rounded, 
+            color: isLocked ? AppColors.textTertiary : Colors.white, 
+            size: 32
+          ),
         ),
       ),
     );

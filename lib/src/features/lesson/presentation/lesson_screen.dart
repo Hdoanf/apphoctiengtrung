@@ -4,86 +4,74 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/widgets/character_tile.dart';
 import '../../../core/widgets/tactile_button.dart';
+import '../../../core/models/lesson_models.dart';
+import '../../../core/data/lesson_service.dart';
 
 class LessonScreen extends StatefulWidget {
-  const LessonScreen({super.key});
+  final String lessonId;
+  const LessonScreen({super.key, required this.lessonId});
 
   @override
   State<LessonScreen> createState() => _LessonScreenState();
 }
 
-class QuizQuestion {
-  final String text;
-  final List<Map<String, String>> options;
-  final int correctIndex;
-
-  QuizQuestion({
-    required this.text,
-    required this.options,
-    required this.correctIndex,
-  });
-}
-
 class _LessonScreenState extends State<LessonScreen> {
   int _selectedIndex = -1;
   int _currentQuestionIndex = 0;
-
-  final List<Map<String, String>> _sharedOptions = [
-    {
-      'character': '再见',
-      'pinyin': 'zài jiàn',
-      'image': 'https://lh3.googleusercontent.com/aida-public/AB6AXuDXHe5aFWkI49u9riqv70QHh5TKcZkBaj0eOgQG_g77VIqAcWqLD6sY88eyN2sM8j6CBeLOeDHSxke-GIsIxqAa7NuqlptLYn6c_DUHpK01x8nOUbRUwTacntPja5dpntacfATVrvYmgMPfniVlESTOlFVIJHtecQZJ7zB19OnTqtMNLnorE8lCJebJ1VrHVdmqeB8lXcuzMogDj5Z64gP0bM55FPZUe-fmJlbfVJDinf5EVTqRSQ__Sun_L4JK8EGN-4f2pppHOBY',
-    },
-    {
-      'character': '你好',
-      'pinyin': 'nǐ hǎo',
-      'image': 'https://lh3.googleusercontent.com/aida-public/AB6AXuB8QRQQSx9PNEB0QAm_Wl0suXH2uOO9_ktKmSi5mabaqZndTbaFfOdxnJjth0AfP0ilgFR64VYHsGsFQO7fyplXrZChVfC1WmHXmiQkVh3BKnIdDrIZS7pfe-HGoSAG6L58UeiGTraJSP31nNOa7CKcVWEFd47EUokgIpb_79LXjpWnPlkLlV_h58mf1g19LbdUfFDM591k0HDAUdeUBNnGw5lXd7fCGnJXUHF3CypB6rVDrb9esVcHmOXteVyeeklOaarO_fd_89o',
-    },
-    {
-      'character': '谢谢',
-      'pinyin': 'xiè xiè',
-      'image': 'https://lh3.googleusercontent.com/aida-public/AB6AXuBHegCa95zxbzDS31uPxfeQuwzcu6VOt9ckRd9ksFCbwcSpF6dYy2JTUkSeaOciGTxiWMJPuujlRNCTKGTz9OXQqzcoN10I2GIElJDIUr8kXBoRg8tA8qCCKef-W1c1vHHwnomugpVU_uwZ6g0ma3M_laWByoLWgIGWTzOOCvSZxpdx0gT-OVq7_LIdLwk08xzYildxE4xooHRW0y0uNqW63MGUwKlFNNUN6FIRMNWnRDaPVsgh7q6Rte1mi1kF-gbAQ1rBr84Cfxo',
-    },
-    {
-      'character': '水',
-      'pinyin': 'shuǐ',
-      'image': 'https://lh3.googleusercontent.com/aida-public/AB6AXuCQgML5rlVdi4oNOSSDPvtb9vV5wol5jgGAK7wU1rMI2LNUPTz2e4Ly_dSTHA3ZPuPGsLLZ9cmv-jK_sGl3L7SncdIR_mgwHlFZlFVmjEvFvseV52FbnigRRtLYZKAtlMZAxixfhwU6N_0PKiYS2Yh2_XOQ_c4XmU-PeiBl3sfZJMdolTID41i6ubnNxptMtwPRLCBKqhghLy3GLADTOdUrNr_fN3YgoxHuwkj6QLvuSqttoBQSTfz-B_jS0N9GOyYGdLCXwSVlwmU',
-    },
-  ];
-
+  late final Lesson _lesson;
   late final List<QuizQuestion> _questions;
+  
+  // Shuffled options for the current question
+  List<Map<String, String>> _shuffledOptions = [];
+  int _shuffledCorrectIndex = -1;
 
   @override
   void initState() {
     super.initState();
-    _questions = [
-      QuizQuestion(
-        text: 'Từ nào có nghĩa là "Xin chào"?',
-        options: _sharedOptions,
-        correctIndex: 1, // 你好
-      ),
-      QuizQuestion(
-        text: 'Từ nào có nghĩa là "Cảm ơn"?',
-        options: _sharedOptions,
-        correctIndex: 2, // 谢谢
-      ),
-      QuizQuestion(
-        text: 'Từ nào có nghĩa là "Tạm biệt"?',
-        options: _sharedOptions,
-        correctIndex: 0, // 再见
-      ),
-      QuizQuestion(
-        text: 'Từ nào có nghĩa là "Nước"?',
-        options: _sharedOptions,
-        correctIndex: 3, // 水
-      ),
-    ];
+    _lesson = LessonService().units
+        .expand((unit) => unit.lessons)
+        .firstWhere((lesson) => lesson.id == widget.lessonId);
+    _questions = _lesson.questions;
+    
+    if (_questions.isNotEmpty) {
+      _prepareQuestion();
+    }
+  }
+
+  void _prepareQuestion() {
+    final originalQuestion = _questions[_currentQuestionIndex];
+    final originalCorrectOption = originalQuestion.options[originalQuestion.correctIndex];
+    
+    // Create a mutable copy and shuffle
+    _shuffledOptions = List<Map<String, String>>.from(originalQuestion.options)..shuffle();
+    
+    // Find the new index of the correct option
+    _shuffledCorrectIndex = _shuffledOptions.indexOf(originalCorrectOption);
+    _selectedIndex = -1;
   }
 
   double get _progress => (_currentQuestionIndex) / _questions.length;
 
   @override
   Widget build(BuildContext context) {
+    if (_questions.isEmpty) {
+      return Scaffold(
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Text('Chưa có bài tập cho bài học này.'),
+              const SizedBox(height: 16),
+              ElevatedButton(
+                onPressed: () => context.pop(),
+                child: const Text('Quay lại'),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
     final currentQuestion = _questions[_currentQuestionIndex];
 
     return Scaffold(
@@ -111,7 +99,7 @@ class _LessonScreenState extends State<LessonScreen> {
                       textAlign: TextAlign.left,
                     ),
                     const SizedBox(height: 32),
-                    _buildOptionsGrid(currentQuestion),
+                    _buildOptionsGrid(),
                   ],
                 ),
               ),
@@ -134,7 +122,7 @@ class _LessonScreenState extends State<LessonScreen> {
             child: Container(
               width: 40,
               height: 40,
-              decoration: BoxDecoration(
+              decoration: const BoxDecoration(
                 shape: BoxShape.circle,
                 color: Colors.transparent,
               ),
@@ -171,7 +159,6 @@ class _LessonScreenState extends State<LessonScreen> {
           ),
           child: Stack(
             children: [
-              // Liquid 3D highlight
               Positioned(
                 top: 2,
                 left: 4,
@@ -191,7 +178,7 @@ class _LessonScreenState extends State<LessonScreen> {
     );
   }
 
-  Widget _buildOptionsGrid(QuizQuestion currentQuestion) {
+  Widget _buildOptionsGrid() {
     return GridView.builder(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
@@ -199,11 +186,11 @@ class _LessonScreenState extends State<LessonScreen> {
         crossAxisCount: 2,
         crossAxisSpacing: 12,
         mainAxisSpacing: 12,
-        childAspectRatio: 0.75, // Adjust based on your images
+        childAspectRatio: 0.75,
       ),
-      itemCount: currentQuestion.options.length,
+      itemCount: _shuffledOptions.length,
       itemBuilder: (context, index) {
-        final option = currentQuestion.options[index];
+        final option = _shuffledOptions[index];
         return CharacterTile(
           character: option['character']!,
           pinyin: option['pinyin']!,
@@ -218,7 +205,7 @@ class _LessonScreenState extends State<LessonScreen> {
   Widget _buildActionArea() {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
-      decoration: BoxDecoration(
+      decoration: const BoxDecoration(
         color: AppColors.background,
       ),
       child: TactileButton(
@@ -242,8 +229,7 @@ class _LessonScreenState extends State<LessonScreen> {
   }
 
   void _checkAnswer() {
-    final currentQuestion = _questions[_currentQuestionIndex];
-    if (_selectedIndex == currentQuestion.correctIndex) {
+    if (_selectedIndex == _shuffledCorrectIndex) {
       _showResultSheet(isCorrect: true);
     } else {
       _showResultSheet(isCorrect: false);
@@ -295,19 +281,23 @@ class _LessonScreenState extends State<LessonScreen> {
               const SizedBox(height: 24),
               TactileButton(
                 onPressed: () {
-                  Navigator.pop(context); // close bottom sheet
+                  Navigator.pop(context);
                   if (isCorrect) {
                     if (_currentQuestionIndex < _questions.length - 1) {
                       setState(() {
                         _currentQuestionIndex++;
-                        _selectedIndex = -1;
+                        _prepareQuestion();
                       });
                     } else {
-                      // Finished all questions!
-                      context.push('/writing-practice');
+                      // Mark lesson as completed
+                      LessonService().completeLesson(widget.lessonId);
+                      context.pop(true); // Return true to signal completion
                     }
                   } else {
-                    setState(() => _selectedIndex = -1);
+                    setState(() {
+                      _selectedIndex = -1;
+                      _prepareQuestion(); // Reshuffle even on wrong answer for challenge
+                    });
                   }
                 },
                 backgroundColor: Colors.white,
